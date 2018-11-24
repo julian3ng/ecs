@@ -21,7 +21,7 @@
 
 (defparameter *component-system-map* (make-component-system-map))
 
-(defmacro defcomponent (name spec)
+(defmacro define-component (name spec)
   `(progn (defclass ,name (component) ,spec)
           (setf (gethash ',name *component-system-map*) nil)
           (defmethod ,name ((entity entity))
@@ -39,7 +39,7 @@
    (run-function :initarg :run-function :initform (error "Supply :run-function")
                  :accessor run-function)))
 
-(defmacro defsystem (name (entity-var ctype-list) &body body)
+(defmacro define-system (name (entity-var ctype-list) &body body)
   (let ((sys (gensym))
         (ctype (gensym)))
     ;; make the system

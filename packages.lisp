@@ -15,14 +15,13 @@
 
 (defpackage :ecs
   (:use :cl :gmap)
-  (:export :defcomponent
-           :defsystem
+  (:export :define-component
+           :define-system
            :entity
            :make-entity
            :remove-entity
            :add-component-to-entity
            :remove-component-from-entity
            :run-system
-           :reset-ecs))
-
-
+           :reset-ecs
+           :reset-entities))

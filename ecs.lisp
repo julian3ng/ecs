@@ -34,7 +34,7 @@
 ;; name: system
 (defparameter *systems* (make-hash-table))
 (defclass system ()
-  ((eixs :initarg :eixs :initform nil :accessor eixs)
+  ((entities :initarg :entities :initform nil :accessor entities)
    (ctypes :initarg :ctypes :initform nil :accessor ctypes)
    (run-function :initarg :run-function :initform (error "Supply :run-function")
                  :accessor run-function)))
@@ -44,12 +44,12 @@
         (ctype (gensym)))
     ;; make the system
     `(progn (let ((,sys (make-instance 'system
-                                       :eixs nil
+                                       :entities nil
                                        :ctypes ',ctype-list
                                        :run-function (lambda (,entity-var) ,@body))))
               ;; if there' already a system, transfer the entities
               (if (nth-value 1 (gethash ',name *systems*))
-                  (setf (eixs ,sys) (eixs (gethash ',name *systems*))))
+                  (setf (entities ,sys) (entities (gethash ',name *systems*))))
 
               ;; register our system
               (setf (gethash ',name *systems*) ,sys)
@@ -90,39 +90,40 @@
       (subsetp s-ctypes (ctypes ent)))))
 
 
-(defmethod add-entity-to-system ((sys system) eix)
-  (if (compatible sys (get-val *entities* eix))
-      (push eix (eixs sys))))
+(defmethod add-entity-to-system ((sys system) entity)
+  (if (compatible sys entity)
+      (push entity (entities sys))))
 
-(defmethod remove-entity-from-system ((sys system) eix)
-  (with-slots (eixs) sys
-    (setf eixs (delete eix eixs))))
+(defmethod remove-entity-from-system ((sys system) entity)
+  (with-slots (entities) sys
+    (setf entities (delete entity entities))))
 
 
 (defun make-entity (&rest components)
-  ;; add nil to all ctypes because we have global systems with
-  ;; nil for the component list
   (let* ((ctypes (mapcar #'type-of components))
          (ctable (make-hash-table-from-lists ctypes components))
          ;; need the index to construct our entity
-         (eix (insert-val *entities* nil)))
+         (eix (insert-val *entities* nil))
+         (entity (make-instance 'entity
+                                :index eix
+                                :components ctable))
+         )
     ;; insert entity into table for real
-    (setf (get-val *entities* eix)
-          (make-instance 'entity
-                         :index eix
-                         :components ctable))
+    (setf (get-val *entities* eix) entity)
     ;; for each component type
+    ;; add nil to all ctypes because we have global systems with
+    ;; nil for the component list
     (dolist (ctype (cons nil ctypes))
       ;; get the names of systems we may add them to
       (let ((sysnames (gethash ctype *component-system-map*)))
         ;; for each system name
         (dolist (sysname sysnames)
           ;; add the entity
-          (add-entity-to-system (gethash sysname *systems*) eix))))
-    eix))
+          (add-entity-to-system (gethash sysname *systems*) entity))))
+    entity))
 
-(defmethod add-component-to-entity (eix (component component))
-  (with-slots (components) (get-val *entities* eix)
+(defmethod add-component-to-entity ((entity entity) (component component))
+  (with-slots (components) entity
     ;; whether or not it was in there
     (let ((new (null (nth-value 1 (gethash (type-of component) components)))))
       ;; set new component
@@ -130,35 +131,35 @@
       ;; if it's a new component type, check every system
       ;; that uses this component type to see if we can add ourselves in
       (if new
-          (dolist (ctype (ctypes (get-val *entities* eix)))
+          (dolist (ctype (ctypes entity))
             (let ((sysnames (gethash ctype *component-system-map*)))
               (dolist (sysname sysnames)
-                (add-entity-to-system (gethash sysname *systems*) eix)))))))
+                (add-entity-to-system (gethash sysname *systems*) entity)))))))
   t)
 
-(defmethod get-component-from-entity (eix ctype)
+(defmethod get-component-from-entity ((entity entity) ctype)
   (if (subtypep ctype 'component)
-      (with-slots (components) (get-val *entities* eix)
+      (with-slots (components) entity
         (gethash ctype components))
       (error "~A is not a subtype of component ~%" ctype)))
 
-(defun remove-component-from-entity (eix ctype)
-  (if (subtypep ctype 'component)
+(defmethod remove-component-from-entity ((entity entity) ctype)
+  (if (or (subtypep ctype 'component) (null ctype))
       (progn 
         ;; remove eix from all systems that needed that component
         (let ((sysnames (gethash ctype *component-system-map*)))
           (dolist (sysname sysnames)
-            (remove-entity-from-system (gethash sysname *systems*) eix)))
+            (remove-entity-from-system (gethash sysname *systems*) entity)))
         ;; remove component from entity
-        (with-slots (components) (get-val *entities* eix)
+        (with-slots (components) entity
           (remhash ctype components)))
       (error "~A is not a subtype of component~%" ctype)))
 
 (defun remove-entity-by-index (eix)
   (let ((entity (get-val *entities* eix)))
     (with-slots (components) entity
-      (dolist (ctype  (ctypes entity))
-        (remove-component-from-entity eix ctype))))
+      (dolist (ctype (cons nil (ctypes entity)))
+        (remove-component-from-entity entity ctype))))
   (remove-val *entities* eix))
 
 (defmethod remove-entity ((entity entity))
@@ -167,12 +168,12 @@
 
 (defun run-system (sysname)
   (let ((sys (gethash sysname *systems*)))
-    (with-slots (eixs ctypes run-function) sys
+    (with-slots (entities ctypes run-function) sys
       (if (null ctypes)
           (gmap-do (e *entities*)
             (funcall run-function e))
           (loop
-             for e in (mapcar (lambda (eix) (get-val *entities* eix)) eixs)
+             for e in entities
              do (funcall run-function e))))))
 
 ;; utility functions 
@@ -186,7 +187,7 @@
           (loop for k being the hash-keys of
                *systems* using (hash-value v)
              collect (list k
-                           :eixs (eixs v)
+                           :entities (entities v)
                            :ctypes (ctypes v) )))
   (format t "~%====Component-System-Map====~%~S~%"
           (loop for k being the hash-keys of
@@ -202,5 +203,5 @@
 
 (defun reset-entities ()
   (dolist (sysname  (hash-keys *systems*))
-    (setf (eixs  (gethash sysname *systems*)) nil))
+    (setf (entities  (gethash sysname *systems*)) nil))
   (reset *entities*))

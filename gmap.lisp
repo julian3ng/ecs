@@ -49,13 +49,13 @@
                                   :fill-pointer 0)
             :documentation "Entries for the generational map.")
    (length :accessor length
-           :initform 0)   
+           :initform 0)
    (generation :initform 0)
    (next-free :initform 0)))
 
 
 (defmethod initialize-instance :after ((instance gmap) &key)
-  (with-slots (entries) instance 
+  (with-slots (entries) instance
     (dotimes (i (1- *default-gmap-size*))
       (vector-push-extend (make-free-entry :next (1+ i)) entries))
     (vector-push-extend (make-free-entry :next nil) entries)))
@@ -81,7 +81,7 @@
     (with-slots (ix gen) i
       (let ((target-entry (cl:elt entries ix)))
         (if (used-entry-p target-entry)
-            (with-slots (value generation) target-entry 
+            (with-slots (value generation) target-entry
               (when (= generation gen)
                 (setf (cl:elt entries ix) (make-free-entry :next next-free))
                 (incf map-generation)
@@ -95,7 +95,7 @@
       (let ((target-entry (cl:elt entries ix)))
         (if (used-entry-p target-entry)
             (with-slots (value generation) target-entry
-              (if (= generation gen) 
+              (if (= generation gen)
                   (values value t)
                   (values nil nil)))
             (values nil nil))))))

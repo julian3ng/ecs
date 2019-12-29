@@ -3,7 +3,15 @@
   (:shadowing-import-from :cl
                           :delete
                           :elt
-                          :length))
+                          :length)
+  (:export
+   :add-entity
+   :get-entity
+   :delete-entity
+   :add-component
+   :delete-component
+   :get-component
+   :defcomponent))
 
 (in-package :ecs)
 
@@ -83,12 +91,57 @@
                         (values (gmap:elt this-table entity-component-index) t)
                         (values nil nil)))))))
 
-          (defmethod (setf get-component) ((value ,name) (e entity) )
+          (defmethod (setf get-component) ((value ,name) (e entity))
               (with-slots (component-tables) *ecs*
                 (let ((this-table (gethash ',name component-tables)))
                   (with-slots (components) e
                     (multiple-value-bind (entity-component-index present) (gethash ',name components)
                       (if present
                           (setf (gmap:elt this-table entity-component-index) value)
-                          (add-component e value)
-))))))))
+                          (add-component e value)))))))))
+
+;; given: (with-components ((f 'foo) (g 'bar) (h 'baz)) entity
+;;           body)
+;; expand: (let ((f (get-component 'foo entity))
+;;               (g (get-component 'bar entity))
+;;               (h (get-component 'baz entity)))
+;;            body)
+(defmacro with-components (component-list entity &body body)
+  (let* ((ent (gensym))
+         (modified-component-list (mapcar (lambda (binding)
+                                            `(,(first binding) (get-component ,ent ,(second binding))))
+                                          component-list)))
+    `(let* ((,ent ,entity)
+            ,@modified-component-list)
+       ,@body)))
+
+(defparameter *blueprints* (make-hash-table :test #'equal))
+
+(defmacro defblueprint (name component-list)
+  `(progn
+     (setf (gethash ',name *blueprints*) ,component-list)))
+
+(defun add-entity (&key (blueprint nil))
+  (let ((ent (make-instance 'entity)))
+    (when blueprint
+      (multiple-value-bind (components present) (gethash blueprint *blueprints*)
+        (when (not present)
+          (error "Blueprints corrupted"))
+        (dolist (c components)
+          (add-component ent (make-instance c)))))
+    (setf (index ent) (gmap:insert (entities *ecs*) ent))
+    ent))
+
+(defmethod get-entity ((ix gmap:gix))
+  (gmap:elt (entities *ecs*) ix))
+
+(defmethod delete-entity ((ix gmap:gix))
+  (gmap:delete (entities *ecs*) ix))
+
+
+(defcomponent pos1d ((x :initarg :x :initform 0 :accessor x)))
+(defcomponent health ((value :initarg :value :initform (error "provide :value") :accessor value)))
+(defblueprint test '(pos1d))
+(let ((e (add-entity :blueprint 'test)))
+  (setf (x  (get-component e 'pos1d)) 10)
+  (x (get-component e 'pos1d)))

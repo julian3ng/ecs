@@ -2,13 +2,15 @@
   (:use :cl)
   (:shadow :delete
            :elt
-           :length)
+           :length
+           :string)
   (:export :gix
            :gmap
            :insert
            :delete
            :elt
-           :do-values))
+           :do-values
+           :string))
 
 (in-package :gmap)
 
@@ -129,6 +131,12 @@
               (with-slots ((,var value)) ,entry
                 (setf ,final-value (progn ,@body))))
           finally (return ,final-value) ))))
+
+
+(defmethod string ((g gmap))
+  (format nil "~{~A~%~}" (with-slots (entries) g
+                           (loop for e across entries collect
+                                (format nil "~A" e)))))
 
 (defun run-tests ()
   (let* ((g (make-instance 'gmap))

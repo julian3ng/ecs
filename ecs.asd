@@ -5,7 +5,7 @@
     :serial       t
     :components   ((:file "allocator")
                    (:file "gix-array")
-                   (:file "set")
+                   ;(:file "set")
                    (:file "ecs")))
 
 ;;(asdf:operate 'load-op "ecs")

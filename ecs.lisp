@@ -1,8 +1,7 @@
 (defpackage :ecs
   (:use :cl
         :allocator
-        :gix-array
-        :set)
+        :gix-array)
   (:shadow :delete
            :defsystem)
   (:shadowing-import-from :cl

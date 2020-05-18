@@ -26,6 +26,10 @@
     :initarg :generation
     :type 'integer)))
 
+(defmethod print-object ((g gix) out)
+  (with-slots (index generation) g
+    (format out "<gix: ix:~A, gen:~A>" index generation)))
+
 (defclass allocator ()
   ((entries :accessor entries
             :initform (make-array 0

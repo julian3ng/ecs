@@ -1,19 +1,9 @@
 (defpackage :ecs
-  (:use :cl
-   :allocator
-        :gix-array
-   :hashset)
-  (:shadow :delete
-   :defsystem)
-  (:shadowing-import-from :cl
-   :elt
-                          :set
-   :equal)
-  (:export :defcomponent
-   :component
-           :delete
-   :clear
-           :*ecs*))
+  (:use :cl :allocator :gix-array :hashset)
+  (:shadow :delete :defsystem)
+  (:shadowing-import-from :cl :elt :set :equal)
+  (:export :defsystem
+   :defcomponent :component :delete :clear :*ecs*))
 (in-package :ecs)
 
 (declaim (optimize (debug 3) (speed 1)))
@@ -84,17 +74,21 @@
                              component-type-list))))
     (if (null undefined-components)
         ;; If no undefined components, ok to define system
-        (let ((ctype-list (gensym "ctype-list"))
-                                        ;              (ctype (gensym "ctype"))
-              ) 
+        (let ((ctype-list (gensym "ctype-list"))) 
           `(progn
              ;; Evaluate the component type list only once in the generated code
              (let ((,ctype-list ',component-type-list))
                ;; Set up tables
                (setf (gethash ',name (system-component-sets *ecs*))
                      (make-instance 'hashset :values ,ctype-list))
-               (mapcar (lambda (ctype) (setf (gethash ctype (component-system-sets *ecs*))
-                                        (make-instance 'hashset :values (list ',name))))
+
+               
+               (mapcar (lambda (ctype)
+                         (let ((maybe-system-set (gethash ctype (component-system-sets *ecs*))))
+                           (if maybe-system-set
+                               (insert maybe-system-set ',name)
+                               (setf (gethash ctype (component-system-sets *ecs*))
+                                     (make-instance 'hashset :values (list ',name))))))
                        ,ctype-list)
                (setf (gethash ',name (system-gix-sets *ecs*)) (make-instance 'hashset))
                ;; Define the system
@@ -108,11 +102,31 @@
                            (mapcar (lambda (c) (gix-array:elt (gethash c component-tables) ix)) ,ctype-list)))
                      (= 0 (count nil components-present)))))
 
-               ,@(mapcar (lambda (ctype)
-                           `(defmethod (setf component) :after (value (ix allocator:gix) (c (eql ',ctype)))
-                              (when (part-of-system ix ',name)
-                                (insert (gethash ',name (system-gix-sets *ecs*)) ix))))
-                         component-type-list))))
+
+               (defmethod (setf component) :after (value (ix allocator:gix) c)
+                 (do-hashset (sysname (gethash c (component-system-sets *ecs*)))
+                   (when (part-of-system ix sysname)
+                     (insert (gethash sysname (system-gix-sets *ecs*)) ix))))
+
+               (defmethod delete :after ((ix allocator:gix) c)
+                 (do-hashset (sysname (gethash c (component-system-sets *ecs*)))
+                   (when (not (part-of-system ix sysname))
+                     (hashset:delete (gethash sysname (system-gix-sets *ecs*)) ix))))
+               ;; THIS IS WRONG: need to have one :after for setf and
+               ;; delete that goes through all systems affected and
+               ;; adds/deletes the index0
+               
+               
+               ;; ,@(mapcar (lambda (ctype)
+               ;;             `(progn  (defmethod (setf component) :after
+               ;;                          (value (ix allocator:gix) (c (eql ',ctype)))
+               ;;                        (when (part-of-system ix ',name)
+               ;;                          (insert (gethash ',name (system-gix-sets *ecs*)) ix)))
+               ;;                      (defmethod delete :after ((ix allocator:gix) (c (eql ',ctype)))
+               ;;                        (when (not (part-of-system ix ',name))
+               ;;                          (hashset:delete (gethash ',name (system-gix-sets *ecs*)) ix)))))
+               ;;           component-type-list)
+               )))
         ;; Else error out
         (progn
           (format t "Undefined components: ~{~A~^, ~}~%" undefined-components)

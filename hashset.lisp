@@ -27,14 +27,17 @@
       (mapcar (lambda (v) (setf (gethash v data) t)) values))))
 
 (defmethod elt ((hs hashset) element)
+  "Check if element is in hs"
   (with-slots (data) hs
     (gethash element data)))
 
 (defmethod insert ((hs hashset) element)
+  "Insert element into hs"
   (with-slots (data) hs
     (setf (gethash element data) t)))
 
 (defmethod equal ((hs1 hashset) (hs2 hashset))
+  "Check if two hashsets are equal"
   (with-slots ((data1 data)) hs1
     (with-slots ((data2 data)) hs2
       (null (set-difference 
@@ -42,19 +45,23 @@
              (loop for k2 being the hash-keys in data2 collect k2))))))
 
 (defmethod delete ((hs hashset) element)
+  "Remove element from hs"
   (with-slots (data) hs
     (remhash element data)))
 
 (defmacro do-hashset ((var hs &optional result) &body body)
+  "Bind run body on each value of hs bound to var"
   `(with-slots (data) ,hs
      (loop for ,var being the hash-keys in data do ,@body)
      ,result))
 
 (defmethod collect-hashset ((hs hashset))
+  "Collect items of hs into list"
   (with-slots (data) hs
     (loop for k being the hash-keys in data collect k)))
 
 (defmethod intersect ((hs1 hashset) (hs2 hashset))
+  "Intersect two hashsets"
   (let ((out (make-instance 'hashset)))
     (do-hashset (k1 hs1)
       (when (elt hs2 k1)

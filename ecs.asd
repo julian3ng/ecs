@@ -7,8 +7,3 @@
                  (:file "allocator")
                  (:file "gix-array")
                  (:file "ecs")))
-
-;;(asdf:operate 'load-op "ecs")
-
-;;(asdf:load-system "ecs")
-
